@@ -27,6 +27,28 @@ DEFAULT_WORDCHAR_REGEX = '[\w]'
 JSON_FILE_PATTERN = "%s/.%s.json"
 SPACES_RE = re.compile(r"^ | $")
 
+class FakeRegex(object):
+    def __init__(self, pattern, *args):
+        self.inverted = False
+        if pattern[0] == '*':
+            self.inverted = True
+            pattern = pattern[1:]
+
+        self.regex = re.compile(pattern, *args)
+
+    def match(self, text, *args):
+        return self.regex.match(text, *args)
+
+    @property
+    def pattern(self):
+        if self.inverted:
+            return '*' + self.regex.pattern
+        return self.regex.pattern
+
+def compile_regex(text, *args):
+    """Negates if required and compiles regex"""
+    return FakeRegex(text, *args)
+
 def make_wordchar_re(wordChars):
     return "[^%s]" % wordChars
 
@@ -220,7 +242,7 @@ class AbstractWindowFilter:
     
     def set_window_titles(self, regex):
         if regex is not None:
-            self.windowInfoRegex = re.compile(regex, re.UNICODE)
+            self.windowInfoRegex = compile_regex(regex, re.UNICODE)
         else:
             self.windowInfoRegex = regex
             
@@ -277,7 +299,11 @@ class AbstractWindowFilter:
         from . import interface
         r = self.get_applicable_regex()
         if r is not None:
-            return r.match(interface.str_or_bytes_to_str(windowInfo[0])) or r.match(windowInfo[1])
+            value = (r.match(interface.str_or_bytes_to_str(windowInfo[0]))
+                                 or r.match(windowInfo[1]))
+            if r.inverted:
+                value = not value
+            return value
         else:
             return True
             
